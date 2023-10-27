@@ -113,6 +113,7 @@ struct __attribute__((packed)) pcie_cxl_dvsec_header {
 		uint32_t reserved: 28;
 		uint32_t memory_base_low: 4;
 	} cxl_range2_base_low;
+	// TODO: split it to two classes avoid memory issues
 	// Added in DVSEC revision 2
 	struct cxl_capability3 {
 		uint16_t default_volatile_hdm_state_after_cold_reset: 1;
@@ -258,7 +259,7 @@ static int lspci_find_cxl_dvsec()
 	return ret;
 }
 
-static int lspci_input_to_array()
+static int lspci_output_to_array()
 {
 	const std::string address_section{"00: "};
 	constexpr int LSPCIE_NUM_TOKENS = 17;
@@ -323,7 +324,7 @@ int main(int argc, char *argv[])
 	}
 
 	// TODO: this could be directly read from device
-	ret = lspci_input_to_array();
+	ret = lspci_output_to_array();
 	if (ret != 0) {
 		std::cout << "Address space not found!" << std::endl;
 		exit(1);
