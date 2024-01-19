@@ -5,8 +5,12 @@ pkgs.stdenv.mkDerivation {
 	src = ./.;
 
 	# build and runtime depencies
-	buildInputs = with pkgs; [ ];
+	buildInputs = with pkgs; [ pciutils ];
 
 	# build depencies
-	nativeBuildInputs = with pkgs; [ ];
+	nativeBuildInputs = with pkgs; [
+		meson
+		ninja
+		pkg-config
+	];
 }
