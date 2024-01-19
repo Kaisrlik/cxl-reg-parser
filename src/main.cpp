@@ -1,21 +1,35 @@
 #include <unistd.h>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <sstream>
 #include <iostream>
 #include <vector>
 // GCC13 - #include <format>
 
+extern "C"{
+#include <pci/pci.h>
+}
+
+struct __attribute__((packed)) pcie_extended_capability_header {
+	uint32_t pcie_cap_reg : 16;
+	uint32_t pcie_cap_id : 4;
+	uint32_t next_cap : 12;
+};
+
+struct dvsec_header1 {
+	uint32_t dvsec_vendor_id : 16;
+	uint32_t dvsec_revision_id : 4;
+	uint32_t dvsec_len : 12;
+};
+
+struct dvsec_header2 {
+	uint16_t dvsec_id;
+};
+
 struct __attribute__((packed)) pcie_cxl_dvsec_header {
-	uint32_t pcie_extended_capability_header;
-	struct dvsec_header1 {
-		uint32_t dvsec_vendor_id : 16;
-		uint32_t dvsec_revision_id : 4;
-		uint32_t dvsec_len : 12;
-	} dvsec_header1;
-	struct dvsec_header2 {
-		uint16_t dvsec_id;
-	} dvsec_header2;
+	struct dvsec_header1 dvsec_header1;
+	struct dvsec_header2 dvsec_header2;
 	struct cxl_capability {
 		uint16_t cache_capable: 1;
 		uint16_t io_capable: 1;
@@ -290,6 +304,56 @@ static int lspci_output_to_array()
 	return ret;
 }
 
+static int pci_get_extended_reg_space(char *bus, uint8_t *ext)
+{
+	struct pci_dev *dev;
+	struct pci_access *pacc;
+	struct pci_filter filter;
+	char *msg;
+
+	pacc = pci_alloc();
+	pci_init(pacc);
+	pci_filter_init(pacc, &filter);
+	pci_scan_bus(pacc);
+
+	if ((msg = pci_filter_parse_slot(&filter, bus)))
+		std::cout << "- s" << msg << std::endl;
+	std::cout << "Accessing device - " << std::hex << filter.bus <<":"<< filter.slot <<"."<<filter.func << std::endl;
+	dev = pci_get_dev(pacc, 0, filter.bus, filter.slot, filter.func);
+	if (!dev) {
+		fprintf(stderr, "Failed to allocate dev\n");
+		return 1;
+	}
+
+	memset(ext, 0, PCIE_EXTENDED_CONF_SIZE);
+	if (!pci_read_block(dev, 0, ext, PCIE_EXTENDED_CONF_SIZE)) {
+		fprintf(stderr, "Failed to read pci extendend config register\n");
+		return 2;
+	}
+
+	pci_cleanup(pacc);
+	return 0;
+}
+
+static int find_cxl_dvsec(uint8_t *ext)
+{
+	// TODO: add define
+	int i = 0x100;
+	while (i != 0) {
+		struct pcie_extended_capability_header *pcie_cap_hdr = (struct pcie_extended_capability_header*)&ext[i];
+		i = pcie_cap_hdr->next_cap;
+		struct dvsec_header1 *dvsec1= (struct dvsec_header1*)&ext[i + sizeof(pcie_extended_capability_header)];
+		struct dvsec_header2 *dvsec2 = (struct dvsec_header2*)&ext[i + sizeof(pcie_extended_capability_header) + sizeof(dvsec_header1)];
+		// TODO: check size overflow and add defines
+		if(dvsec1->dvsec_vendor_id == 0x1e98 && dvsec2->dvsec_id == 0) {
+			std::cout << "CXL DVSEC found on offset 0x" << std::hex << i << std::endl;
+			std::cout << "--------------------------------" << std::endl;
+			break;
+		}
+	}
+	return i;
+}
+
 static void usage_and_exit(int exit_code, const char *app_name)
 {
 	std::cout << app_name << " [OPTIONS]" << std::endl;
@@ -304,33 +368,56 @@ int main(int argc, char *argv[])
 	char opt;
 	int ret;
 	int cxl_dvsec_off = 0;
+	bool pci = false;
+	char *bus;
 
-	while ((opt = getopt(argc, argv, "h")) != -1) {
+	while ((opt = getopt(argc, argv, "hs:")) != -1) {
 		switch (opt) {
 		case 'h':
 			usage_and_exit(0, argv[0]);
+			break;
+		case 's':
+		        bus = optarg;
+			pci = true;
 			break;
 		default:
 			usage_and_exit(1, "Invalid or missing argument");
 		}
 	}
 
-	// TODO: this could be found in pcie extended configuration space by finding
-	// CXL DVSEC header
+	// Find device and his dvsec using libpci
+	if (pci) {
+		uint8_t pcie_ext[PCIE_EXTENDED_CONF_SIZE];
+		int cxl_dvsec_ptr = 0;
+
+		if (pci_get_extended_reg_space(bus, pcie_ext))
+			return 1;
+
+		if ((cxl_dvsec_ptr = find_cxl_dvsec(pcie_ext)) == 0) {
+			std::cout << "CXL DVSEC not found." << std::endl;
+			return 0;
+		}
+
+		struct pcie_cxl_dvsec_header *cxl_dvsec = (struct pcie_cxl_dvsec_header *)
+			&pcie_ext[cxl_dvsec_ptr + sizeof(pcie_extended_capability_header)];
+		std::cout << *cxl_dvsec << std::endl;
+		return 0;
+	}
+
+	// Use output of lspci -s ? -vvvv -xxxx
 	cxl_dvsec_off = lspci_find_cxl_dvsec();
 	if (cxl_dvsec_off <= 0) {
 		std::cout << "CXL DVSEC Capabilities not found!" << std::endl;
 		exit(1);
 	}
 
-	// TODO: this could be directly read from device
 	ret = lspci_output_to_array();
 	if (ret != 0) {
 		std::cout << "Address space not found!" << std::endl;
 		exit(1);
 	}
 
-	struct pcie_cxl_dvsec_header *cxl_dvsec = (struct pcie_cxl_dvsec_header *)&pcie_cfg[cxl_dvsec_off];
+	struct pcie_cxl_dvsec_header *cxl_dvsec = (struct pcie_cxl_dvsec_header *)&pcie_cfg[cxl_dvsec_off + sizeof(pcie_extended_capability_header)];
 	std::cout << *cxl_dvsec << std::endl;
 
 	return 0;
