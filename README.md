@@ -3,6 +3,12 @@
 This project should help to read CXL DVSEC registers by passing information from
 CXL DVSEC stored in the extended PCIe configuration space.
 
+# Dependencies:
+
+Debian like system:
+
+    apt install meson ninja-build libpci-dev
+
 # Usage
 
 Nowadays, there are two major way how to use the tool - passing output of
