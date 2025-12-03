@@ -1,6 +1,7 @@
 #include <unistd.h>
 #include <cstdlib>
 #include <cstring>
+#include <cstdint>
 #include <fstream>
 #include <sstream>
 #include <iostream>
@@ -14,7 +15,9 @@ extern "C"{
 }
 
 constexpr int PCIE_EXTENDED_CONF_SIZE = 4096;
-uint8_t pcie_cfg[PCIE_EXTENDED_CONF_SIZE] = {};
+std::uint8_t pcie_cfg[PCIE_EXTENDED_CONF_SIZE] = {};
+
+const std::string EXPECTED_LINE {"00: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00"};
 
 static int lspci_find_cxl_dvsec()
 {
@@ -55,6 +58,15 @@ static int lspci_output_to_array()
 
 		ret = 0;
 		std::stringstream ss(line);
+
+		// TODO: add regexp
+		if (line.size() == 0)
+			return 0;
+		if (line.size() < EXPECTED_LINE.size()) {
+			std::cout << "Unexpected lenght of input" << std::endl;
+			return 1;
+		}
+
 		std::string token;
 		int address = 0;
 		for (int i = 0; i < LSPCIE_NUM_TOKENS; ++i) {
@@ -64,13 +76,14 @@ static int lspci_output_to_array()
 				address = number;
 				continue;
 			}
+			// TODO: add check to avoid out of bound access
 			pcie_cfg[address + i - 1] = number;
 		}
 	}
 	return ret;
 }
 
-static int pci_get_extended_reg_space(char *bus, uint8_t *ext)
+static int pci_get_extended_reg_space(char *bus, std::uint8_t *ext)
 {
 	struct pci_dev *dev;
 	struct pci_access *pacc;
@@ -101,7 +114,7 @@ static int pci_get_extended_reg_space(char *bus, uint8_t *ext)
 	return 0;
 }
 
-static int find_cxl_dvsec(uint8_t *ext)
+static int find_cxl_dvsec(std::uint8_t *ext)
 {
 	// TODO: add define
 	int i = 0x100;
@@ -153,7 +166,7 @@ int main(int argc, char *argv[])
 
 	// Find device and his dvsec using libpci
 	if (pci) {
-		uint8_t pcie_ext[PCIE_EXTENDED_CONF_SIZE];
+		std::uint8_t pcie_ext[PCIE_EXTENDED_CONF_SIZE];
 		int cxl_dvsec_ptr = 0;
 
 		if (pci_get_extended_reg_space(bus, pcie_ext))
@@ -176,6 +189,7 @@ int main(int argc, char *argv[])
 		std::cout << "CXL DVSEC Capabilities not found!" << std::endl;
 		exit(1);
 	}
+	std::cout << "CXL DVSEC Capabilities ofsset is " << std::hex << cxl_dvsec_off << std::endl;
 
 	ret = lspci_output_to_array();
 	if (ret != 0) {
