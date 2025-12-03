@@ -137,8 +137,25 @@ static void usage_and_exit(int exit_code, const char *app_name)
 {
 	std::cout << app_name << " [OPTIONS]" << std::endl;
 	std::cout << std::endl;
+	std::cout << "Application tries to find CXL configuration and prints the parsed output." << std::endl;
+	std::cout << std::endl;
 	std::cout << "OPTIONS are:" << std::endl;
 	std::cout << "    -h              Print this help message and exit." << std::endl;
+	std::cout << "    -s              Pass full PCIe address - [domain:]bus:slot:func" << std::endl;
+	std::cout << std::endl;
+	std::cout << "Example usage:" << std::endl;
+	std::cout << "  Directly reading configuration from extended config space of device:" << std::endl;
+	std::cout << std::endl;
+	std::cout << "    cxl-reg-parser -s 27:00.0" << std::endl;
+	std::cout << std::endl;
+	std::cout << "  Reading configuration though output of lspci:" << std::endl;
+	std::cout << std::endl;
+	std::cout << "    cxl-reg-parser <<< $(lspci -s 27:00.0 -vvvv -xxxx)" << std::endl;
+	std::cout << std::endl;
+	std::cout << "  Reading configuration though output of lspci saved in log file:" << std::endl;
+	std::cout << std::endl;
+	std::cout << "    lspci -s 27:00.0 -vvvv -xxxx > lscpi.log" << std::endl;
+	std::cout << "    cxl-reg-parser < lspci.log" << std::endl;
 	exit(exit_code);
 }
 
