@@ -1,24 +1,53 @@
 #include <sstream>
 #include <iostream>
+#include <cstdint>
 // GCC13 - #include <format>
 
 #define CXL_VENDOR_ID 0x1e98
 #define CXL_DVSEC_ID_CXL_DEVICES 0x0
 
 struct __attribute__((packed)) pcie_extended_capability_header {
-	uint32_t pcie_cap_reg : 16;
-	uint32_t pcie_cap_id : 4;
-	uint32_t next_cap : 12;
+	std::uint32_t pcie_cap_reg : 16;
+	std::uint32_t pcie_cap_id : 4;
+	std::uint32_t next_cap : 12;
+
+	friend std::ostream& operator<<(std::ostream &os, const struct pcie_extended_capability_header &e)
+	{
+		os << "pcie_extended_capability_header: {" << std::endl
+			<< "  .pcie_cap_reg: " << e.pcie_cap_reg << std::endl
+			<< "  .pcie_cap_id: " << e.pcie_cap_id << std::endl
+			<< "  .next_cap: " << e.next_cap << std::endl
+			<< "}" << std::endl;
+		return os;
+	}
 };
 
-struct dvsec_header1 {
-	uint32_t dvsec_vendor_id : 16;
-	uint32_t dvsec_revision_id : 4;
-	uint32_t dvsec_len : 12;
+struct __attribute__((packed)) dvsec_header1 {
+	std::uint32_t dvsec_vendor_id : 16;
+	std::uint32_t dvsec_revision_id : 4;
+	std::uint32_t dvsec_len : 12;
+
+	friend std::ostream& operator<<(std::ostream &os, const struct dvsec_header1 &e)
+	{
+		os << "  .dvsec_header1: {" << std::endl
+			<< "    .dvsec_vendor_id: " << e.dvsec_vendor_id << std::endl
+			<< "    .dvsec_revision_id: " << e.dvsec_revision_id << std::endl
+			<< "    .dvsec_len: " << e.dvsec_len << std::endl
+			<< "  }" << std::endl;
+		return os;
+	}
 };
 
-struct dvsec_header2 {
-	uint16_t dvsec_id;
+struct __attribute__((packed)) dvsec_header2 {
+	std::uint16_t dvsec_id;
+
+	friend std::ostream& operator<<(std::ostream &os, const struct dvsec_header2 &e)
+	{
+		os << "  .dvsec_header2: {" << std::endl
+			<< "    .dvsec_id: " << e.dvsec_id << std::endl
+			<< "  }" << std::endl;
+		return os;
+	}
 };
 
 struct __attribute__((packed)) pcie_cxl_dvsec_header {
@@ -135,14 +164,8 @@ struct __attribute__((packed)) pcie_cxl_dvsec_header {
 	friend std::ostream& operator<<(std::ostream &os, const pcie_cxl_dvsec_header &e)
 	{
 		os << "PCIe CXL DVSEC header: {" << std::endl << std::hex
-			<< "  .dvsec_header1: {" << std::endl
-			<< "    .dvsec_vendor_id: " << (unsigned)e.dvsec_header1.dvsec_vendor_id << std::endl
-			<< "    .dvsec_revision_id: " << (unsigned)e.dvsec_header1.dvsec_revision_id << std::endl
-			<< "    .dvsec_len: " << (unsigned)e.dvsec_header1.dvsec_len << std::endl
-			<< "  }" << std::endl
-			<< "  .dvsec_header2: {" << std::endl
-			<< "    .dvsec_id: " << (unsigned)e.dvsec_header2.dvsec_id << std::endl
-			<< "  }" << std::endl
+			<< e.dvsec_header1
+			<< e.dvsec_header2
 			<< "  .cxl_capability: {" << std::endl
 			<< "    .cache_capable: " << (unsigned)e.cxl_capability.cache_capable << std::endl
 			<< "    .io_capable: " << (unsigned)e.cxl_capability.io_capable << std::endl

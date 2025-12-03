@@ -121,11 +121,12 @@ static int find_cxl_dvsec(std::uint8_t *ext)
 	while (i != 0) {
 		struct pcie_extended_capability_header *pcie_cap_hdr = (struct pcie_extended_capability_header*)&ext[i];
 		i = pcie_cap_hdr->next_cap;
-		struct dvsec_header1 *dvsec1= (struct dvsec_header1*)&ext[i + sizeof(pcie_extended_capability_header)];
-		struct dvsec_header2 *dvsec2 = (struct dvsec_header2*)&ext[i + sizeof(pcie_extended_capability_header) + sizeof(dvsec_header1)];
+		int ext_cap_off = i + sizeof(pcie_extended_capability_header);
+		struct dvsec_header1 *dvsec1= (struct dvsec_header1*)&ext[ext_cap_off];
+		struct dvsec_header2 *dvsec2 = (struct dvsec_header2*)&ext[ext_cap_off + sizeof(dvsec_header1)];
 		// TODO: check size overflow and add defines
 		if(dvsec1->dvsec_vendor_id == CXL_VENDOR_ID && dvsec2->dvsec_id == CXL_DVSEC_ID_CXL_DEVICES) {
-			std::cout << "CXL DVSEC found on offset 0x" << std::hex << i << std::endl;
+			std::cout << "CXL DVSEC found on offset 0x" << std::hex << ext_cap_off << std::endl;
 			std::cout << "--------------------------------" << std::endl;
 			break;
 		}
@@ -163,9 +164,10 @@ int main(int argc, char *argv[])
 {
 	char opt;
 	int ret;
-	int cxl_dvsec_off = 0;
+	int cap_off = 0;
 	bool pci = false;
 	char *bus;
+	int cxl_dvsec_ptr = 0;
 
 	while ((opt = getopt(argc, argv, "hs:")) != -1) {
 		switch (opt) {
@@ -183,39 +185,33 @@ int main(int argc, char *argv[])
 
 	// Find device and his dvsec using libpci
 	if (pci) {
-		std::uint8_t pcie_ext[PCIE_EXTENDED_CONF_SIZE];
-		int cxl_dvsec_ptr = 0;
-
-		if (pci_get_extended_reg_space(bus, pcie_ext))
+		if (pci_get_extended_reg_space(bus, pcie_cfg)) {
+			std::cout << "Unable to obtain extended config space." << std::endl;
 			return 1;
-
-		if ((cxl_dvsec_ptr = find_cxl_dvsec(pcie_ext)) == 0) {
-			std::cout << "CXL DVSEC not found." << std::endl;
-			return 0;
 		}
+	} else {
+		// Use output of lspci -s ? -vvvv -xxxx
+		cap_off = lspci_find_cxl_dvsec();
+		if (cap_off <= 0) {
+			std::cout << "CXL Capabilities not found!" << std::endl;
+			exit(1);
+		}
+		std::cout << "CXL Capabilities ofsset is " << std::hex << cap_off << std::endl;
 
-		struct pcie_cxl_dvsec_header *cxl_dvsec = (struct pcie_cxl_dvsec_header *)
-			&pcie_ext[cxl_dvsec_ptr + sizeof(pcie_extended_capability_header)];
-		std::cout << *cxl_dvsec << std::endl;
+		ret = lspci_output_to_array();
+		if (ret != 0) {
+			std::cout << "Address space not found!" << std::endl;
+			exit(1);
+		}
+	}
+
+	if ((cxl_dvsec_ptr = find_cxl_dvsec(pcie_cfg)) == 0) {
+		std::cout << "CXL DVSEC not found." << std::endl;
 		return 0;
 	}
 
-	// Use output of lspci -s ? -vvvv -xxxx
-	cxl_dvsec_off = lspci_find_cxl_dvsec();
-	if (cxl_dvsec_off <= 0) {
-		std::cout << "CXL DVSEC Capabilities not found!" << std::endl;
-		exit(1);
-	}
-	std::cout << "CXL DVSEC Capabilities ofsset is " << std::hex << cxl_dvsec_off << std::endl;
-
-	ret = lspci_output_to_array();
-	if (ret != 0) {
-		std::cout << "Address space not found!" << std::endl;
-		exit(1);
-	}
-
-	struct pcie_cxl_dvsec_header *cxl_dvsec = (struct pcie_cxl_dvsec_header *)&pcie_cfg[cxl_dvsec_off + sizeof(pcie_extended_capability_header)];
+	struct pcie_cxl_dvsec_header *cxl_dvsec = (struct pcie_cxl_dvsec_header *)
+		&pcie_cfg[cxl_dvsec_ptr + sizeof(pcie_extended_capability_header)];
 	std::cout << *cxl_dvsec << std::endl;
-
 	return 0;
 }
