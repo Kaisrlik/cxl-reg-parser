@@ -14,6 +14,7 @@ extern "C"{
 #include <pci/pci.h>
 }
 
+constexpr int PCIE_EXTENDED_CONF_BASE = 0x100;
 constexpr int PCIE_EXTENDED_CONF_SIZE = 4096;
 std::uint8_t pcie_cfg[PCIE_EXTENDED_CONF_SIZE] = {};
 
@@ -116,20 +117,20 @@ static int pci_get_extended_reg_space(char *bus, std::uint8_t *ext)
 
 static int find_cxl_dvsec(std::uint8_t *ext)
 {
-	// TODO: add define
-	int i = 0x100;
+	int i = PCIE_EXTENDED_CONF_BASE;
 	while (i != 0) {
-		struct pcie_extended_capability_header *pcie_cap_hdr = (struct pcie_extended_capability_header*)&ext[i];
-		i = pcie_cap_hdr->next_cap;
 		int ext_cap_off = i + sizeof(pcie_extended_capability_header);
 		struct dvsec_header1 *dvsec1= (struct dvsec_header1*)&ext[ext_cap_off];
 		struct dvsec_header2 *dvsec2 = (struct dvsec_header2*)&ext[ext_cap_off + sizeof(dvsec_header1)];
 		// TODO: check size overflow and add defines
 		if(dvsec1->dvsec_vendor_id == CXL_VENDOR_ID && dvsec2->dvsec_id == CXL_DVSEC_ID_CXL_DEVICES) {
-			std::cout << "CXL DVSEC found on offset 0x" << std::hex << ext_cap_off << std::endl;
+			std::cout << "CXL DVSEC found on offset 0x" << std::hex << i << std::endl;
 			std::cout << "--------------------------------" << std::endl;
 			break;
 		}
+
+		struct pcie_extended_capability_header *pcie_cap_hdr = (struct pcie_extended_capability_header*)&ext[i];
+		i = pcie_cap_hdr->next_cap;
 	}
 	return i;
 }
